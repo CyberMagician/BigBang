@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cosmic Evolution Sandbox 16.2 - Spacetime Creation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; margin: 0; overflow: hidden; background-color: #000000; color: #e5e5e5; }
+        canvas { display: block; }
+        #ui-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; padding: 20px; box-sizing: border-box; display: flex; justify-content: space-between; flex-wrap: nowrap; gap: 10px; }
+        .ui-panel { background-color: rgba(10, 10, 15, 0.75); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 12px; padding: 15px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); pointer-events: auto; overflow-y: auto; flex-shrink: 0; }
+        #info-panel { width: 350px; max-height: calc(100vh - 40px); }
+        #right-panels-container { display: flex; flex-direction: column; gap: 10px; width: 250px; max-height: calc(100vh - 40px); }
+        #inventory-panel, #visuals-panel { width: 100%; }
+        .info-title { font-size: 1.2rem; font-weight: 600; color: #ffffff; margin-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 5px; }
+        .info-text { font-size: 0.9rem; color: #d1d5db; line-height: 1.6; }
+        .stat-item { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .stat-label { font-size: 0.9rem; color: #a0aec0; }
+        .stat-value { font-size: 1rem; font-weight: 500; color: #f0f0f0; }
+        .toggle-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; }
+        #controls-panel { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 600px; pointer-events: auto; }
+        input[type=range] { -webkit-appearance: none; background: transparent; }
+        input[type=range]::-webkit-slider-runnable-track { height: 4px; background: rgba(255,255,255,0.2); border-radius: 2px; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%; background: #a0aec0; margin-top: -6px; cursor: pointer; }
+        input[type=range]:hover::-webkit-slider-thumb { background: #e2e8f0; }
+        @media (max-width: 768px) {
+            #ui-container { flex-direction: column; align-items: center; flex-wrap: wrap; }
+            #info-panel, #right-panels-container { width: 95%; max-height: 40vh; }
+        }
+    </style>
+</head>
+<body>
+    <div id="ui-container">
+        <div id="info-panel" class="ui-panel">
+            <div id="era-title" class="info-title">The Singularity</div>
+            <p id="era-description" class="info-text">The universe begins with a single quantum of energy. The expansion of spacetime itself creates new energy, fueling an exponential cascade of creation and complexity.</p>
+            <div class="stat-item"><span class="stat-label">Simulation Ticks</span><span id="time-value" class="stat-value">0 Ticks</span></div>
+            <div class="stat-item"><span class="stat-label">Total Kinetic Energy</span><span id="total-ke-value" class="stat-value">0</span></div>
+            <div class="stat-item"><span class="stat-label">Total Mass</span><span id="total-mass-value" class="stat-value">0</span></div>
+            <div class="stat-item"><span class="stat-label">Net Matter</span><span id="net-matter-value" class="stat-value">0</span></div>
+            <div class="stat-item"><span class="stat-label">Expansion Rate</span><span id="expansion-rate-value" class="stat-value">0.0200</span></div>
+            <div class="stat-item"><span class="stat-label">Stars</span><span id="stars-value" class="stat-value">0</span></div>
+            <div class="stat-item"><span class="stat-label">Black Holes</span><span id="black-holes-value" class="stat-value">0</span></div>
+            <div class="stat-item"><span class="stat-label">Spacetime Volume</span><span id="volume-value" class="stat-value">1 m³</span></div>
+        </div>
+        <div id="right-panels-container">
+            <div id="inventory-panel" class="ui-panel">
+                <div class="info-title">Cosmic Inventory</div>
+                <div id="inventory-list"></div>
+            </div>
+            <div id="visuals-panel" class="ui-panel">
+                <div class="info-title">Visuals & Controls</div>
+                <div class="toggle-item"><label for="toggle-outline" class="stat-label">Show Outline</label><input type="checkbox" id="toggle-outline" checked></div>
+                <div class="toggle-item"><label for="toggle-flash" class="stat-label">Show FX</label><input type="checkbox" id="toggle-flash" checked></div>
+            </div>
+        </div>
+    </div>
+    <div id="controls-panel" class="ui-panel">
+        <label for="speed-slider" class="block text-center font-medium mb-2">Simulation Speed</label>
+        <input type="range" id="speed-slider" min="0" max="2000" value="100" step="1" class="w-full">
+    </div>
+    <canvas id="bg"></canvas>
+    <script type="importmap">
+    { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/" } }
+    </script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+        // --- Simulation Constants ---
+        const INITIAL_SCALE = 1;
+        const GRAVITY_CONSTANT = 0.5;
+        const MAX_PARTICLES_PER_TYPE = 20000;
+        const ANNIHILATION_RADIUS = 2.0;
+        const STRONG_FORCE_RANGE = 2.5; 
+        const STAR_FORMATION_MASS = 100;
+        const SUPERNOVA_MASS_THRESHOLD = 800;
+        const BLACK_HOLE_MASS_THRESHOLD = 2000;
+        const MIN_SCALE = 0.5;
+        const PAIR_PRODUCTION_ENERGY_THRESHOLD = 6000;
+        const KINETIC_PRESSURE_FACTOR = 5e-5;
+        const GRAVITATIONAL_PULL_FACTOR = 1e-5;
+        const PRIMORDIAL_SPIN_FACTOR = 5;
+        const BARYON_FORMATION_KE_THRESHOLD = 5000;
+        const VACUUM_ENERGY_FACTOR = 1e-4; // How much energy is created per unit of volume
+
+        // --- Scene Setup ---
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 50000);
+        const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('bg'), antialias: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        camera.position.set(0, 0, 800);
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        const composer = new EffectComposer(renderer);
+        composer.addPass(new RenderPass(scene, camera));
+        composer.addPass(new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.2, 0.5, 0.8));
+        
+        const boundaryBaseGeometry = new THREE.SphereGeometry(1, 64, 64);
+        boundaryBaseGeometry.setAttribute('originalPosition', new THREE.BufferAttribute(boundaryBaseGeometry.attributes.position.array.slice(), 3));
+        
+        const blobMaterial = new THREE.PointsMaterial({ color: 0x333333, size: 0.5, transparent: true, opacity: 0.5 });
+        const blobPoints = new THREE.Points(boundaryBaseGeometry, blobMaterial);
+        scene.add(blobPoints);
+
+        const outlineGeometry = new THREE.EdgesGeometry(boundaryBaseGeometry);
+        outlineGeometry.setAttribute('originalPosition', new THREE.BufferAttribute(outlineGeometry.attributes.position.array.slice(), 3));
+        const outlineMaterial = new THREE.LineBasicMaterial({ color: 0x555555, transparent: true, opacity: 0.6 });
+        const outlineBoundary = new THREE.LineSegments(outlineGeometry, outlineMaterial);
+        scene.add(outlineBoundary);
+
+        scene.add(new THREE.AmbientLight(0xffffff, 0.2));
+
+        // --- Particle Definitions ---
+        const particleDefs = {
+            'Energy Quanta': { color: 0xffffff, size: 0.2, mass: 0, isMatter: false },
+            'Quark': { color: 0xff4136, size: 0.5, mass: 1, isMatter: true },
+            'Anti-Quark': { color: 0xff9a94, size: 0.5, mass: 1, isMatter: false },
+            'Electron': { color: 0x0074D9, size: 0.3, mass: 0.0005, isMatter: true },
+            'Positron': { color: 0x7abfff, size: 0.3, mass: 0.0005, isMatter: false },
+            'Proton': { color: 0xB10DC9, size: 2.0, mass: 3, isMatter: true },
+            'Neutron': { color: 0xFDFD96, size: 2.0, mass: 3.01, isMatter: true },
+            'Hydrogen': { color: 0x9370DB, size: 2.5, mass: 3.0005, isMatter: true },
+            'Helium': { color: 0xFFD700, size: 2.8, mass: 12, isMatter: true },
+            'Carbon': { color: 0x444444, size: 3.2, mass: 36, isMatter: true },
+            'Oxygen': { color: 0xADD8E6, size: 3.5, mass: 48, isMatter: true },
+            'Iron': { color: 0xA9A9A9, size: 4.0, mass: 168, isMatter: true },
+        };
+        
+        const inventory = {}; const dummy = new THREE.Object3D(); const particlePools = {}; const activeParticles = {};
+        for (const name in particleDefs) {
+            const def = particleDefs[name];
+            const maxCount = MAX_PARTICLES_PER_TYPE;
+            inventory[name] = { mesh: new THREE.InstancedMesh(new THREE.SphereGeometry(def.size, 8, 8), new THREE.MeshStandardMaterial({ color: def.color, roughness: 0.5 }), maxCount), def: def };
+            inventory[name].mesh.count = 0; scene.add(inventory[name].mesh);
+            particlePools[name] = []; activeParticles[name] = [];
+        }
+
+        const flashPool = [], activeFlashes = [];
+        function getFlashFromPool() { if (flashPool.length > 0) { const f = flashPool.pop(); f.visible = true; scene.add(f); return f; } return new THREE.Mesh(new THREE.SphereGeometry(1, 16, 16), new THREE.MeshBasicMaterial({ transparent: true })); }
+        function returnFlashToPool(f) { f.visible = false; scene.remove(f); flashPool.push(f); }
+        
+        class SpatialGrid {
+            constructor(boxSize, cellSize) { this.boxSize = boxSize; this.cellSize = cellSize; this.clear(); }
+            getHash(x, y, z) { return `${Math.floor((x + this.boxSize) / this.cellSize)},${Math.floor((y + this.boxSize) / this.cellSize)},${Math.floor((z + this.boxSize) / this.cellSize)}`; }
+            insert(p) { const h = this.getHash(p.position.x, p.position.y, p.position.z); if (!this.grid[h]) this.grid[h] = []; this.grid[h].push(p); }
+            query(p, r, types) { const n = [], pos = p.position, rad = r > 0 ? r : this.cellSize; const minX = Math.floor((pos.x - rad + this.boxSize) / this.cellSize), maxX = Math.floor((pos.x + rad + this.boxSize) / this.cellSize); const minY = Math.floor((pos.y - rad + this.boxSize) / this.cellSize), maxY = Math.floor((pos.y + rad + this.boxSize) / this.cellSize); const minZ = Math.floor((pos.z - rad + this.boxSize) / this.cellSize), maxZ = Math.floor((pos.z + rad + this.boxSize) / this.cellSize); for (let i = minX; i <= maxX; i++) for (let j = minY; j <= maxY; j++) for (let k = minZ; k <= maxZ; k++) { const h = `${i},${j},${k}`; if (this.grid[h]) for(const neighbor of this.grid[h]) if (neighbor !== p && types.includes(neighbor.type)) n.push(neighbor); } return n; }
+            clear() { this.grid = {}; }
+        }
+        const spatialGrid = new SpatialGrid(50000, 50);
+
+        let stars = [], blackHoles = [];
+        let particlesToAdd = [], particlesToRemove = new Set();
+        
+        let expansionVelocity = 0.2;
+        let netMatter = 0;
+        let totalKineticEnergy = 0;
+        let totalMass = 0;
+
+        let simulationSpeed = 100;
+        let era = "The Singularity";
+        document.getElementById('speed-slider').addEventListener('input', (e) => { simulationSpeed = parseInt(e.target.value); });
+        document.getElementById('toggle-outline').addEventListener('change', (e) => outlineBoundary.visible = e.target.checked);
+        let showFlash = true;
+        document.getElementById('toggle-flash').addEventListener('change', (e) => showFlash = e.target.checked);
+
+        function addParticle(name, position, velocity) {
+            const pool = particlePools[name], activeList = activeParticles[name], inv = inventory[name];
+            if (activeList.length >= inv.mesh.instanceMatrix.count) return null;
+            const p = pool.length > 0 ? pool.pop() : { position: new THREE.Vector3(), velocity: new THREE.Vector3() };
+            p.type = name; p.active = true;
+            p.position.copy(position || new THREE.Vector3((Math.random() - 0.5) * INITIAL_SCALE, (Math.random() - 0.5) * INITIAL_SCALE, (Math.random() - 0.5) * INITIAL_SCALE));
+            p.velocity.copy(velocity || new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).multiplyScalar(10));
+            p.id = activeList.length;
+            p.starId = -1;
+            if (name === 'Neutron') p.lifetime = 15;
+            activeList.push(p); return p;
+        }
+
+        // --- Initial Conditions ---
+        addParticle('Energy Quanta', new THREE.Vector3(), new THREE.Vector3().randomDirection().multiplyScalar(100));
+
+        function removeParticle(p) { if (p && p.active) { p.active = false; particlesToRemove.add(p); } }
+        function processRemovals() {
+            if (particlesToRemove.size === 0) return;
+            const removals = {};
+            for (const p of particlesToRemove) { if (!removals[p.type]) removals[p.type] = []; removals[p.type].push(p); }
+            for (const type in removals) {
+                const active = activeParticles[type], pool = particlePools[type];
+                removals[type].sort((a, b) => b.id - a.id);
+                for (const p of removals[type]) { const last = active.pop(); if (p.id < active.length) { active[p.id] = last; last.id = p.id; } pool.push(p); }
+            }
+            particlesToRemove.clear();
+        }
+        function createEffect(pos, color = 0xffffff, scale = 3, lifetime = 1.0) { if (!showFlash) return; const f = getFlashFromPool(); f.position.copy(pos); f.material.color.set(color); f.scale.setScalar(scale); f.material.opacity = 1.0; activeFlashes.push({ mesh: f, lifetime: 0, maxLifetime: lifetime }); }
+
+        function runSimulationTick(deltaTime, scale, redshiftFactor) {
+            processRemovals();
+            particlesToAdd.forEach(pData => {
+                const newP = addParticle(pData.name, pData.position, pData.velocity);
+                if (newP && pData.starId !== undefined && stars[pData.starId]) {
+                    stars[pData.starId].particles.add(newP);
+                    newP.starId = pData.starId;
+                }
+            });
+            particlesToAdd = [];
+
+            spatialGrid.clear();
+            for (const type in activeParticles) {
+                for (const p of activeParticles[type]) spatialGrid.insert(p);
+            }
+            
+            tryVacuumEnergyProduction(scale);
+            tryAnnihilation();
+            tryPairProduction();
+            tryToFormProtonsAndNeutrons();
+            if (totalKineticEnergy / (Object.values(activeParticles).reduce((s, a) => s + a.length, 0) || 1) < 50) tryToFormHydrogen();
+
+            stars.forEach(star => { if (star.mass > 0) star.simulate(deltaTime); });
+            blackHoles.forEach(bh => bh.accrete());
+            stars = stars.filter(s => s.mass > 0);
+
+            let currentTotalKE = 0;
+            let currentTotalMass = 0;
+            let matterCount = 0;
+            let antimatterCount = 0;
+
+            for (const type in activeParticles) {
+                const list = activeParticles[type];
+                const def = particleDefs[type];
+                currentTotalMass += list.length * def.mass;
+
+                if (type !== 'Energy Quanta') {
+                    if (def.isMatter) matterCount += list.length;
+                    else antimatterCount += list.length;
+                }
+
+                for (const p of list) {
+                    if (!p.active || p.starId !== -1) continue;
+                    if (p.type === 'Neutron') {
+                        p.lifetime -= deltaTime;
+                        if (p.lifetime <= 0) {
+                            particlesToAdd.push({ name: 'Proton', position: p.position.clone(), velocity: p.velocity.clone() });
+                            particlesToAdd.push({ name: 'Electron', position: p.position.clone() });
+                            removeParticle(p);
+                            continue;
+                        }
+                    }
+                    const allGravSources = [...stars, ...blackHoles];
+                    for (const source of allGravSources) {
+                        const distSq = p.position.distanceToSquared(source.position);
+                        if (distSq > 1) {
+                            p.velocity.add(new THREE.Vector3().subVectors(source.position, p.position).normalize().multiplyScalar(GRAVITY_CONSTANT * source.mass / distSq * deltaTime));
+                        }
+                    }
+                    
+                    if (type === 'Energy Quanta' && redshiftFactor > 0 && redshiftFactor < 1) {
+                        p.velocity.multiplyScalar(redshiftFactor);
+                    }
+                    
+                    const kineticEnergy = 0.5 * (def.mass > 0 ? def.mass : 1) * p.velocity.lengthSq();
+                    currentTotalKE += kineticEnergy;
+                }
+            }
+            totalKineticEnergy = currentTotalKE;
+            totalMass = currentTotalMass;
+            netMatter = matterCount - antimatterCount;
+            
+            if (scale > 0) {
+                const kineticPressure = totalKineticEnergy * KINETIC_PRESSURE_FACTOR / (scale * scale);
+                const gravitationalPull = totalMass * GRAVITATIONAL_PULL_FACTOR / (scale * scale);
+                expansionVelocity += (kineticPressure - gravitationalPull) * deltaTime;
+            }
+            
+            for (const type in activeParticles) {
+                for (const p of activeParticles[type]) {
+                    if (!p.active) continue;
+                    p.position.add(p.velocity.clone().multiplyScalar(deltaTime));
+                    if (p.position.length() > scale) {
+                        p.velocity.reflect(p.position.clone().normalize());
+                        p.position.setLength(scale);
+                    }
+                }
+            }
+        }
+        
+        function triggerBigBounce() {
+            const particlesToConvert = [];
+            for (const type in activeParticles) {
+                activeParticles[type].forEach(p => particlesToConvert.push(p));
+            }
+            particlesToConvert.forEach(p => removeParticle(p));
+            
+            stars.forEach(s => scene.remove(s.light));
+            blackHoles.forEach(bh => scene.remove(bh.mesh));
+            stars = [];
+            blackHoles = [];
+
+            addParticle('Energy Quanta', new THREE.Vector3(), new THREE.Vector3().randomDirection().multiplyScalar(100));
+
+            expansionVelocity = 0.2;
+            totalCosmicTime = 0;
+            era = "Rebirth";
+        }
+        
+        class Star {
+            constructor(id, initialParticles) { this.id = id; this.particles = new Set(initialParticles); this.position = new THREE.Vector3(); this.mass = 0; this.radius = 0; this.updateProperties(); const starLight = new THREE.PointLight(0xfff0dd, 2, this.radius * 2); starLight.position.copy(this.position); this.light = starLight; scene.add(this.light); }
+            updateProperties() { if (this.particles.size === 0) { this.mass = 0; return; } this.position.set(0,0,0); let totalMass = 0; for (const p of this.particles) { const def = particleDefs[p.type]; totalMass += def.mass; this.position.add(p.position.clone().multiplyScalar(def.mass)); } this.mass = totalMass; if (this.mass > 0) this.position.divideScalar(this.mass); let maxDistSq = 0; for (const p of this.particles) { maxDistSq = Math.max(maxDistSq, p.position.distanceToSquared(this.position)); } this.radius = Math.sqrt(maxDistSq); this.light.position.copy(this.position); this.light.intensity = Math.log(this.mass) * 2; this.light.distance = this.radius * 5; }
+            simulate(deltaTime) { this.updateProperties(); if (this.mass === 0) return; for(const p of this.particles) { const distSq = p.position.distanceToSquared(this.position); if (distSq > 1) { p.velocity.add(new THREE.Vector3().subVectors(this.position, p.position).normalize().multiplyScalar(GRAVITY_CONSTANT * this.mass / distSq * deltaTime)); } } if (Math.random() < 0.001) this.die(); }
+            die() { scene.remove(this.light); createEffect(this.position, 0xffffff, this.radius * 5, 5.0); if (this.mass > BLACK_HOLE_MASS_THRESHOLD) { blackHoles.push(new BlackHole(this.position.clone(), this.mass)); } else if (this.mass > SUPERNOVA_MASS_THRESHOLD) { for (const p of this.particles) { p.velocity.add(new THREE.Vector3().subVectors(p.position, this.position).normalize().multiplyScalar(100 + Math.random() * 50)); p.starId = -1; } } else { for (const p of this.particles) { removeParticle(p); } } this.particles.clear(); this.mass = 0; }
+        }
+
+        class BlackHole {
+            constructor(position, mass) { this.position = position; this.mass = mass; this.radius = Math.log(mass) * 0.5; this.mesh = new THREE.Mesh(new THREE.SphereGeometry(this.radius, 32, 32), new THREE.MeshBasicMaterial({ color: 0x000000 })); this.mesh.position.copy(position); scene.add(this.mesh); }
+            accrete() { for(const type in activeParticles) { for(const p of activeParticles[type]) { if(p.active && p.starId === -1 && p.position.distanceTo(this.position) < this.radius * 1.5) { this.mass += particleDefs[p.type].mass; removeParticle(p); } } } this.radius = Math.log(this.mass) * 0.5; this.mesh.scale.setScalar(this.radius); }
+        }
+
+        function checkForStarIgnition() { const massiveParticles = []; const massiveTypes = Object.keys(particleDefs).filter(t => particleDefs[t].mass > 1 && t !== 'Proton' && t !== 'Neutron'); for(const type of massiveTypes) { massiveParticles.push(...activeParticles[type]); } const freeParticles = massiveParticles.filter(p => p.starId === -1 && p.active); if(freeParticles.length < 50) return; const randomParticle = freeParticles[Math.floor(Math.random() * freeParticles.length)]; const neighbors = spatialGrid.query(randomParticle, 100, massiveTypes).filter(p => p.starId === -1 && p.active); if(neighbors.length > 20) { let potentialMass = 0; neighbors.forEach(p => potentialMass += particleDefs[p.type].mass); if (potentialMass > STAR_FORMATION_MASS) { const newStarId = stars.length; const newStar = new Star(newStarId, neighbors); neighbors.forEach(p => p.starId = newStarId); stars.push(newStar); createEffect(newStar.position, 0xfff0dd, 20); } } }
+        function tryToFormProtonsAndNeutrons() {
+            const qList = activeParticles['Quark'];
+            if (!qList || qList.length < 3) return;
+            const checked = new Set();
+            for (const q1 of qList) {
+                if (!q1.active || checked.has(q1)) continue;
+                const neighbors = spatialGrid.query(q1, STRONG_FORCE_RANGE, ['Quark']).filter(p => p.active && !checked.has(p));
+                if (neighbors.length < 2) continue;
+                const q2 = neighbors[0], q3 = neighbors[1];
+                const avgPos = new THREE.Vector3().add(q1.position).add(q2.position).add(q3.position).divideScalar(3);
+                if (q1.position.distanceTo(avgPos) < STRONG_FORCE_RANGE && q2.position.distanceTo(avgPos) < STRONG_FORCE_RANGE && q3.position.distanceTo(avgPos) < STRONG_FORCE_RANGE) {
+                    const relativeVelSq = q1.velocity.distanceToSquared(q2.velocity) + q1.velocity.distanceToSquared(q3.velocity) + q2.velocity.distanceToSquared(q3.velocity);
+                    if (relativeVelSq < BARYON_FORMATION_KE_THRESHOLD) {
+                        const momentum = new THREE.Vector3().add(q1.velocity).add(q2.velocity).add(q3.velocity);
+                        const formationType = Math.random() > 0.5 ? 'Proton' : 'Neutron';
+                        particlesToAdd.push({ name: formationType, position: avgPos, velocity: momentum.divideScalar(3) });
+                        removeParticle(q1); removeParticle(q2); removeParticle(q3);
+                        checked.add(q1); checked.add(q2); checked.add(q3);
+                    }
+                }
+            }
+        }
+        function tryToFormHydrogen() { const pList = activeParticles['Proton']; if (!pList || !activeParticles['Electron']) return; const checked = new Set(); for (const p of pList) { if (!p.active || checked.has(p) || p.starId !== -1) continue; const neighbors = spatialGrid.query(p, 10, ['Electron']).filter(n => n.active && !checked.has(n) && n.starId === -1); if (neighbors.length > 0) { const e = neighbors[0]; if (p.velocity.distanceToSquared(e.velocity) < 25) { const momentum = new THREE.Vector3().add(p.velocity.clone().multiplyScalar(particleDefs.Proton.mass)).add(e.velocity.clone().multiplyScalar(particleDefs.Electron.mass)); particlesToAdd.push({ name: 'Hydrogen', position: new THREE.Vector3().addVectors(p.position, e.position).divideScalar(2), velocity: momentum.divideScalar(particleDefs.Hydrogen.mass) }); removeParticle(p); removeParticle(e); checked.add(p); checked.add(e); } } } }
+        function tryAnnihilation() { const checkedParticles = new Set(); annihilatePair('Quark', 'Anti-Quark', checkedParticles); annihilatePair('Electron', 'Positron', checkedParticles); }
+        function annihilatePair(p1_name, p2_name, checked) {
+            const p1_list = activeParticles[p1_name];
+            if (!p1_list) return;
+            for (const p1 of p1_list) {
+                if (!p1.active || checked.has(p1)) continue;
+                const neighbors = spatialGrid.query(p1, ANNIHILATION_RADIUS, [p2_name]);
+                for (const p2 of neighbors) {
+                    if (p2.active && !checked.has(p2) && p1.position.distanceTo(p2.position) < ANNIHILATION_RADIUS) {
+                        const avgPos = new THREE.Vector3().addVectors(p1.position, p2.position).divideScalar(2);
+                        const v1 = new THREE.Vector3().randomDirection().multiplyScalar(80);
+                        const v2 = v1.clone().negate();
+                        particlesToAdd.push({ name: 'Energy Quanta', position: avgPos.clone(), velocity: v1 });
+                        particlesToAdd.push({ name: 'Energy Quanta', position: avgPos.clone(), velocity: v2 });
+                        removeParticle(p1); removeParticle(p2);
+                        checked.add(p1); checked.add(p2);
+                        createEffect(avgPos, 0xffffff, 5);
+                        break;
+                    }
+                }
+            }
+        }
+        function tryPairProduction() {
+            const quanta = activeParticles['Energy Quanta'];
+            if (!quanta || quanta.length < 2) return;
+            const checked = new Set();
+            for(const q1 of quanta) {
+                if (!q1.active || checked.has(q1)) continue;
+                const neighbors = spatialGrid.query(q1, ANNIHILATION_RADIUS, ['Energy Quanta']);
+                for(const q2 of neighbors) {
+                    if (q2.active && !checked.has(q2)) {
+                        if (q1.velocity.lengthSq() + q2.velocity.lengthSq() > PAIR_PRODUCTION_ENERGY_THRESHOLD) {
+                            const avgPos = new THREE.Vector3().addVectors(q1.position, q2.position).divideScalar(2);
+                            const [type, antiType] = Math.random() > 0.5 ? ['Quark', 'Anti-Quark'] : ['Electron', 'Positron'];
+                            const combinedVel = q1.velocity.clone().add(q2.velocity);
+                            const v1 = combinedVel.clone().multiplyScalar(0.5);
+                            const v2 = v1.clone().negate();
+                            
+                            const tangentialVel = new THREE.Vector3(0, 0, 1).cross(avgPos).normalize().multiplyScalar(PRIMORDIAL_SPIN_FACTOR);
+                            v1.add(tangentialVel);
+                            v2.add(tangentialVel);
+
+                            particlesToAdd.push({ name: type, position: avgPos, velocity: v1});
+                            particlesToAdd.push({ name: antiType, position: avgPos, velocity: v2});
+                            removeParticle(q1);
+                            removeParticle(q2);
+                            checked.add(q1);
+                            checked.add(q2);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        
+        function tryVacuumEnergyProduction(scale) {
+            const volume = Math.max(1, 4/3 * Math.PI * Math.pow(scale, 3));
+            const numToCreate = Math.floor(volume * VACUUM_ENERGY_FACTOR);
+            for (let i = 0; i < numToCreate; i++) {
+                const pos = new THREE.Vector3().randomDirection().multiplyScalar(Math.random() * scale);
+                const vel = new THREE.Vector3().randomDirection().multiplyScalar(80 + Math.random() * 20);
+                addParticle('Energy Quanta', pos, vel);
+            }
+        }
+        
+        const clock = new THREE.Clock();
+        let lastScale = INITIAL_SCALE, accumulator = 0, lastUpdateTime = 0, totalCosmicTime = 0;
+        const tempVec = new THREE.Vector3();
+        const fixedDeltaTime = 1 / 60;
+
+        function animate(time) {
+            requestAnimationFrame(animate);
+            const frameTime = clock.getDelta();
+            if (simulationSpeed > 0) {
+                accumulator += frameTime * (simulationSpeed / 100);
+                while (accumulator >= fixedDeltaTime) {
+                    totalCosmicTime += fixedDeltaTime * 100;
+                    let currentScale = Math.max(0.01, lastScale + expansionVelocity * fixedDeltaTime * 2);
+
+                    if (currentScale <= MIN_SCALE && expansionVelocity < 0) {
+                        triggerBigBounce();
+                        lastScale = INITIAL_SCALE; 
+                        accumulator = 0; 
+                        break; 
+                    }
+
+                    runSimulationTick(fixedDeltaTime, currentScale, lastScale / currentScale);
+                    lastScale = currentScale;
+                    accumulator -= fixedDeltaTime;
+                }
+            }
+            
+            for (const type in activeParticles) {
+                const inv = inventory[type], list = activeParticles[type];
+                for (let i = 0; i < list.length; i++) { dummy.position.copy(list[i].position); dummy.updateMatrix(); inv.mesh.setMatrixAt(i, dummy.matrix); }
+                inv.mesh.count = list.length; inv.mesh.instanceMatrix.needsUpdate = true;
+            }
+
+            for (let i = activeFlashes.length - 1; i >= 0; i--) {
+                const f = activeFlashes[i]; f.lifetime += frameTime * 5 / f.maxLifetime; f.mesh.scale.multiplyScalar(1.05); f.mesh.material.opacity = 1.0 - f.lifetime;
+                if (f.mesh.material.opacity <= 0) { returnFlashToPool(f.mesh); activeFlashes.splice(i, 1); }
+            }
+            
+            const time_ = clock.getElapsedTime() * 0.1;
+            
+            const blobPositions = blobPoints.geometry.attributes.position;
+            const blobOriginalPos = blobPoints.geometry.attributes.originalPosition;
+            for (let i = 0; i < blobPositions.count; i++) {
+                tempVec.fromBufferAttribute(blobOriginalPos, i);
+                const noise = 0.1 * (Math.sin(tempVec.x * 2 + time_) + Math.sin(tempVec.y * 2 + time_) + Math.sin(tempVec.z * 2 + time_));
+                tempVec.multiplyScalar(1 + noise);
+                blobPositions.setXYZ(i, tempVec.x, tempVec.y, tempVec.z);
+            }
+            blobPositions.needsUpdate = true;
+            
+            const outlinePositions = outlineBoundary.geometry.attributes.position;
+            const outlineOriginalPos = outlineBoundary.geometry.attributes.originalPosition;
+            for (let i = 0; i < outlinePositions.count; i++) {
+                tempVec.fromBufferAttribute(outlineOriginalPos, i);
+                 const noise = 0.1 * (Math.sin(tempVec.x * 2 + time_) + Math.sin(tempVec.y * 2 + time_) + Math.sin(tempVec.z * 2 + time_));
+                tempVec.multiplyScalar(1 + noise);
+                outlinePositions.setXYZ(i, tempVec.x, tempVec.y, tempVec.z);
+            }
+            outlinePositions.needsUpdate = true;
+
+            blobPoints.scale.setScalar(lastScale);
+            outlineBoundary.scale.setScalar(lastScale);
+            
+            if (time - lastUpdateTime > 100) {
+                 if (era === "Rebirth") {
+                    document.getElementById('era-title').textContent = "Universe Reborn";
+                } else if (expansionVelocity < -0.001) {
+                    era = "Collapsing";
+                    document.getElementById('era-title').textContent = "The Big Crunch";
+                } else if (netMatter > 0 && stars.length > 0) {
+                    era = "Stelliferous Era";
+                } else if (netMatter > 0) {
+                    era = "Hadron Epoch";
+                } else if (lastScale > 1.1) {
+                    era = "Lepton Epoch";
+                }
+
+                const updateText = (id, value, format) => {
+                    const el = document.getElementById(id);
+                    if (!el) return;
+                    if (isFinite(value)) {
+                        if (format === 'expo') el.textContent = value.toExponential(2);
+                        else if (format === 'locale') el.textContent = value.toLocaleString();
+                        else if (format === 'fixed') el.textContent = value.toFixed(4);
+                        else el.textContent = value;
+                    } else {
+                        el.textContent = "Error";
+                    }
+                };
+
+                updateText('time-value', Math.floor(totalCosmicTime), 'locale');
+                updateText('total-ke-value', totalKineticEnergy, 'expo');
+                updateText('total-mass-value', totalMass, 'expo');
+                updateText('net-matter-value', netMatter, 'locale');
+                updateText('volume-value', (4/3 * Math.PI * Math.pow(lastScale, 3)), 'expo');
+                updateText('expansion-rate-value', expansionVelocity, 'fixed');
+                updateText('stars-value', stars.filter(s => s.mass > 0).length, 'locale');
+                updateText('black-holes-value', blackHoles.length, 'locale');
+                
+                let html = '';
+                const sortedKeys = Object.keys(activeParticles).sort((a,b) => particleDefs[b].mass - particleDefs[a].mass);
+                for (const name of sortedKeys) { const count = activeParticles[name].length; if(count > 0) html += `<div class="stat-item"><span class="stat-label">${name}</span><span class="stat-value">${count.toLocaleString()}</span></div>`; }
+                document.getElementById('inventory-list').innerHTML = html;
+                lastUpdateTime = time;
+            }
+            
+            controls.update();
+            composer.render();
+        }
+        animate(0);
+        window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); composer.setSize(window.innerWidth, window.innerHeight); });
+    </script>
+</body>
+</html>
